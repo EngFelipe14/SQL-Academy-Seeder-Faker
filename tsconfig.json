@@ -1,0 +1,47 @@
+{ 
+  "compilerOptions": {
+    // Type Checking → Comprobación de tipo
+    "strict": true, // noImplicitAny - noImplicitThis - alwaysStrict - strictBindCallApply - strictFunctionTypes - strictNullChecks - strictPropertyInitialization - useUnknownInCatchVariables
+    "strictBuiltinIteratorReturn": true,
+    "noUnusedParameters": true,
+    "noUnusedLocals": true,
+    "noUncheckedIndexedAccess": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitReturns": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+    "allowUnreachableCode": false,
+
+    // Modules → Módulos
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "rewriteRelativeImportExtensions": true,
+    "resolvePackageJsonImports": true,
+    "resolvePackageJsonExports": true,
+    "resolveJsonModule": true,
+    "baseUrl": "./",
+    "paths": {
+      // Luego los declaro
+    },
+    "moduleResolution": "nodenext",
+    "module": "nodenext",
+    "target": "esnext",
+    "lib": ["ESNext"],
+    
+
+    // Emit → Emitir
+    "removeComments": true,
+    "noEmitOnError": true,
+
+    // JavaScript Support → Compatibilidad con JavaScript
+
+    // Otros que no recuerdo su categoría
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleDetection": "auto",
+
+  },
+  "include": ["./src"],
+  "exclude": ["dist", "node_modules", "**/*.test.ts"]
+}
