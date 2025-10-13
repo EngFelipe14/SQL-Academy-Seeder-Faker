@@ -1,0 +1,311 @@
+-- DB
+DROP DATABASE IF EXISTS ecommerce;
+CREATE DATABASE ecommerce;
+
+USE ecommerce;
+
+-- 1) Entidades base
+
+
+CREATE TABLE CUSTOMERS (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  first_name VARCHAR(100),
+  last_name VARCHAR(100),
+  phone VARCHAR(50),
+  is_active TINYINT DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE ADDRESSES (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  customer_id INT NOT NULL,
+  label VARCHAR(50),
+  street VARCHAR(255),
+  city VARCHAR(100),
+  state VARCHAR(100),
+  postal_code VARCHAR(30),
+  country VARCHAR(100),
+  is_default_shipping TINYINT DEFAULT 0,
+  is_default_billing TINYINT DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (customer_id) REFERENCES CUSTOMERS(id) ON DELETE CASCADE
+);
+
+CREATE TABLE WAREHOUSES (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(150) NOT NULL,
+  street VARCHAR(255),
+  city VARCHAR(100),
+  country VARCHAR(100),
+  phone VARCHAR(50),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE SUPPLIERS (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(200) NOT NULL,
+  contact_name VARCHAR(150),
+  email VARCHAR(255),
+  phone VARCHAR(50),
+  address VARCHAR(255),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE PAYMENT_METHODS (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL, -- e.g. "Credit card", "PayPal", "Bank transfer"
+  provider VARCHAR(100),
+  details JSON NULL,
+  is_active TINYINT DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+
+-- 2) Catálogo y variantes
+
+CREATE TABLE PRODUCTS (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  sku VARCHAR(100) UNIQUE,
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  base_price DECIMAL(12,2) NOT NULL DEFAULT 0.00, -- precio base
+  active TINYINT DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE PRODUCT_VARIANTS (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  product_id INT NOT NULL,
+  sku VARCHAR(120) UNIQUE, -- variante sku (opcional)
+  name VARCHAR(150), -- "Red / M", "64GB"
+  price_override DECIMAL(12,2) NULL, -- si la variante tiene precio propio
+  barcode VARCHAR(100) NULL,
+  metadata JSON NULL, -- tallas, color, atributos libres
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (product_id) REFERENCES PRODUCTS(id) ON DELETE CASCADE
+);
+
+CREATE TABLE CATEGORIES (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(150) NOT NULL,
+  slug VARCHAR(150) UNIQUE,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE PRODUCT_CATEGORIES (
+  product_id INT NOT NULL,
+  category_id INT NOT NULL,
+  PRIMARY KEY (product_id,category_id),
+  FOREIGN KEY (product_id) REFERENCES PRODUCTS(id) ON DELETE CASCADE,
+  FOREIGN KEY (category_id) REFERENCES CATEGORIES(id) ON DELETE CASCADE
+);
+
+
+-- 3) Inventario y trazabilidad
+
+CREATE TABLE INVENTORY (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  product_variant_id INT NOT NULL,
+  warehouse_id INT NOT NULL,
+  quantity_available INT NOT NULL DEFAULT 0,
+  quantity_reserved INT NOT NULL DEFAULT 0,
+  last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_variant_warehouse (product_variant_id,warehouse_id),
+  FOREIGN KEY (product_variant_id) REFERENCES PRODUCT_VARIANTS(id) ON DELETE CASCADE,
+  FOREIGN KEY (warehouse_id) REFERENCES WAREHOUSES(id) ON DELETE CASCADE
+);
+
+CREATE TABLE INVENTORY_MOVEMENTS (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  product_variant_id INT NOT NULL,
+  warehouse_id INT NOT NULL,
+  change_qty INT NOT NULL,
+  movement_type ENUM('PURCHASE_ORDER','SALE','RETURN','ADJUSTMENT','TRANSFER','RESERVATION','RELEASE') NOT NULL,
+  reference_id INT NULL,
+  notes VARCHAR(500) NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (product_variant_id) REFERENCES PRODUCT_VARIANTS(id) ON DELETE CASCADE,
+  FOREIGN KEY (warehouse_id) REFERENCES WAREHOUSES(id) ON DELETE CASCADE,
+  INDEX (product_variant_id),
+  INDEX (warehouse_id)
+);
+
+
+-- 4) Órdenes de compra a proveedores
+
+CREATE TABLE PURCHASE_ORDERS_TO_SUPPLIERS (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  supplier_id INT,
+  po_number VARCHAR(120) UNIQUE,
+  status ENUM('created','sent','received','partially_received','cancelled') DEFAULT 'created',
+  total_amount DECIMAL(12,2) DEFAULT 0.00,
+  expected_delivery_date DATE NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (supplier_id) REFERENCES SUPPLIERS(id) ON DELETE SET NULL
+);
+
+CREATE TABLE PURCHASE_ORDER_ITEMS (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  purchase_order_id INT NOT NULL,
+  product_variant_id INT NOT NULL,
+  quantity_ordered INT NOT NULL,
+  quantity_received INT DEFAULT 0,
+  unit_cost DECIMAL(12,2) DEFAULT 0.00,
+  FOREIGN KEY (purchase_order_id) REFERENCES PURCHASE_ORDERS_TO_SUPPLIERS(id) ON DELETE CASCADE,
+  FOREIGN KEY (product_variant_id) REFERENCES PRODUCT_VARIANTS(id) ON DELETE CASCADE
+);
+
+
+-- 5) Shopping bag
+
+CREATE TABLE SHOPPING_BAG (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  customer_id INT NULL,
+  session_id VARCHAR(255) NULL,
+  status ENUM('active','converted','abandoned') DEFAULT 'active',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (customer_id) REFERENCES CUSTOMERS(id) ON DELETE SET NULL
+);
+
+CREATE TABLE SHOPPING_BAG_ITEMS (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  shopping_bag_id INT NOT NULL,
+  product_variant_id INT NOT NULL,
+  quantity INT NOT NULL DEFAULT 1,
+  unit_price_snapshot DECIMAL(12,2) NOT NULL,
+  added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (shopping_bag_id) REFERENCES SHOPPING_BAG(id) ON DELETE CASCADE,
+  FOREIGN KEY (product_variant_id) REFERENCES PRODUCT_VARIANTS(id) ON DELETE CASCADE
+);
+
+
+-- 6) Orders
+
+CREATE TABLE ORDERS (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  order_number VARCHAR(120) NOT NULL UNIQUE,
+  customer_id INT NULL,
+  billing_address_id INT NULL,
+  shipping_address_id INT NULL,
+  status ENUM('pending','paid','processing','shipped','delivered','cancelled','refunded') DEFAULT 'pending',
+  subtotal DECIMAL(12,2) DEFAULT 0.00,
+  shipping_cost DECIMAL(12,2) DEFAULT 0.00,
+  tax_amount DECIMAL(12,2) DEFAULT 0.00,
+  total DECIMAL(12,2) DEFAULT 0.00,
+  payment_method_id INT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (customer_id) REFERENCES CUSTOMERS(id) ON DELETE SET NULL,
+  FOREIGN KEY (billing_address_id) REFERENCES ADDRESSES(id) ON DELETE SET NULL,
+  FOREIGN KEY (shipping_address_id) REFERENCES ADDRESSES(id) ON DELETE SET NULL,
+  FOREIGN KEY (payment_method_id) REFERENCES PAYMENT_METHODS(id) ON DELETE SET NULL
+);
+
+CREATE TABLE ORDER_ITEMS (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  order_id INT NOT NULL,
+  product_variant_id INT NOT NULL,
+  quantity INT NOT NULL,
+  unit_price DECIMAL(12,2) NOT NULL,
+  line_total DECIMAL(12,2) NOT NULL,
+  sku_snapshot VARCHAR(120) NULL,
+  FOREIGN KEY (order_id) REFERENCES ORDERS(id) ON DELETE CASCADE,
+  FOREIGN KEY (product_variant_id) REFERENCES PRODUCT_VARIANTS(id) ON DELETE RESTRICT
+);
+
+
+-- 7) Pagos
+
+CREATE TABLE PAY (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  order_id INT NOT NULL,
+  payment_method_id INT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  currency VARCHAR(10) DEFAULT 'USD',
+  status ENUM('pending','authorized','captured','failed','refunded') DEFAULT 'pending',
+  transaction_id VARCHAR(255) NULL,
+  paid_at DATETIME NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (order_id) REFERENCES ORDERS(id) ON DELETE CASCADE,
+  FOREIGN KEY (payment_method_id) REFERENCES PAYMENT_METHODS(id) ON DELETE SET NULL
+);
+
+CREATE TABLE RECEIPT (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  order_id INT NOT NULL,
+  payment_id INT NOT NULL,
+  receipt_number VARCHAR(120) UNIQUE NOT NULL,
+  issued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  metadata JSON NULL,
+  FOREIGN KEY (order_id) REFERENCES ORDERS(id) ON DELETE CASCADE,
+  FOREIGN KEY (payment_id) REFERENCES PAY(id) ON DELETE CASCADE
+);
+
+
+-- 8) Envíos
+
+CREATE TABLE SHIPMENTS (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  order_id INT NOT NULL,
+  shipment_number VARCHAR(120) UNIQUE,
+  carrier VARCHAR(100) NULL,
+  tracking_number VARCHAR(200) NULL,
+  status ENUM('created','in_transit','delivered','returned') DEFAULT 'created',
+  from_warehouse_id INT NULL,
+  shipped_at DATETIME NULL,
+  delivered_at DATETIME NULL,
+  FOREIGN KEY (order_id) REFERENCES ORDERS(id) ON DELETE CASCADE,
+  FOREIGN KEY (from_warehouse_id) REFERENCES WAREHOUSES(id) ON DELETE SET NULL
+);
+
+CREATE TABLE SHIPMENT_ITEMS (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  shipment_id INT NOT NULL,
+  order_item_id INT NOT NULL,
+  quantity INT NOT NULL,
+  FOREIGN KEY (shipment_id) REFERENCES SHIPMENTS(id) ON DELETE CASCADE,
+  FOREIGN KEY (order_item_id) REFERENCES ORDER_ITEMS(id) ON DELETE CASCADE
+);
+
+
+-- 9) Historial y extras
+
+CREATE TABLE PURCHASE_HISTORY (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  order_id INT NOT NULL,
+  customer_id INT NULL,
+  snapshot JSON NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (order_id) REFERENCES ORDERS(id) ON DELETE CASCADE,
+  FOREIGN KEY (customer_id) REFERENCES CUSTOMERS(id) ON DELETE SET NULL
+);
+
+CREATE TABLE REVIEWS (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  customer_id INT NOT NULL,
+  product_variant_id INT NULL,
+  product_id INT NULL,
+  rating TINYINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  title VARCHAR(200),
+  comment TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (customer_id) REFERENCES CUSTOMERS(id) ON DELETE CASCADE,
+  FOREIGN KEY (product_variant_id) REFERENCES PRODUCT_VARIANTS(id) ON DELETE SET NULL,
+  FOREIGN KEY (product_id) REFERENCES PRODUCTS(id) ON DELETE SET NULL
+);
+
+CREATE TABLE COUPONS (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  code VARCHAR(100) UNIQUE NOT NULL,
+  discount_type ENUM('percentage','fixed') NOT NULL,
+  discount_value DECIMAL(12,2) NOT NULL,
+  min_order_amount DECIMAL(12,2) DEFAULT 0.00,
+  expires_at DATETIME NULL,
+  usage_limit INT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

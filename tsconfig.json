@@ -19,7 +19,6 @@
     "resolvePackageJsonImports": true,
     "resolvePackageJsonExports": true,
     "resolveJsonModule": true,
-    "baseUrl": "./",
     "paths": {
       // Luego los declaro
     },
