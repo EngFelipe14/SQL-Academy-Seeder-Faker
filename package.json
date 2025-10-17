@@ -1,9 +1,12 @@
 {
   "name": "sql-academy-seeder-faker",
   "version": "1.0.0",
-  "description": "A Node.js script that uses faker.js to generate sample data for the SQL Academy API database. It connects directly to MySQL and seeds tables with realistic e-commerce data for testing and learning SQL.",
+  "description": "A Node.js + TypeScript CLI using Faker.js to generate realistic e-commerce datasets. Supports MySQL seeding and CSV export with configurable volumes and referential integrity.",
   "main": "index.js",
   "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

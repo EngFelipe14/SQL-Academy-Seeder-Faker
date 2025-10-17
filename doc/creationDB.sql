@@ -4,8 +4,8 @@ CREATE DATABASE ecommerce;
 
 USE ecommerce;
 
--- 1) Entidades base
 
+-- 1) Entidades base
 
 CREATE TABLE CUSTOMERS (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -71,7 +71,7 @@ CREATE TABLE PRODUCTS (
   sku VARCHAR(100) UNIQUE,
   name VARCHAR(255) NOT NULL,
   description TEXT,
-  base_price DECIMAL(12,2) NOT NULL DEFAULT 0.00, -- precio base
+  base_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   is_active TINYINT DEFAULT 1,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -80,11 +80,11 @@ CREATE TABLE PRODUCTS (
 CREATE TABLE PRODUCT_VARIANTS (
   id INT AUTO_INCREMENT PRIMARY KEY,
   product_id INT NOT NULL,
-  sku VARCHAR(120) UNIQUE, -- variante sku (opcional)
-  name VARCHAR(150), -- "Red / M", "64GB"
-  price_override DECIMAL(12,2) NULL, -- si la variante tiene precio propio
+  sku VARCHAR(120) UNIQUE,
+  name VARCHAR(150),
+  price_override DECIMAL(12,2) NULL,
   barcode VARCHAR(100) NULL,
-  metadata JSON NULL, -- tallas, color, atributos libres
+  metadata JSON NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (product_id) REFERENCES PRODUCTS(id) ON DELETE CASCADE
 );
@@ -119,8 +119,6 @@ CREATE TABLE INVENTORY (
   FOREIGN KEY (warehouse_id) REFERENCES WAREHOUSES(id) ON DELETE CASCADE
 );
 
-
-
 CREATE TABLE INVENTORY_MOVEMENTS (
   id INT AUTO_INCREMENT PRIMARY KEY,
   product_variant_id INT NOT NULL,
@@ -133,6 +131,7 @@ CREATE TABLE INVENTORY_MOVEMENTS (
   FOREIGN KEY (product_variant_id) REFERENCES PRODUCT_VARIANTS(id) ON DELETE CASCADE,
   FOREIGN KEY (warehouse_id) REFERENCES WAREHOUSES(id) ON DELETE CASCADE
 );
+
 
 -- 4) Órdenes de compra a proveedores
 
@@ -157,6 +156,7 @@ CREATE TABLE PURCHASE_ORDER_ITEMS (
   FOREIGN KEY (purchase_order_id) REFERENCES PURCHASE_ORDERS_TO_SUPPLIERS(id) ON DELETE CASCADE,
   FOREIGN KEY (product_variant_id) REFERENCES PRODUCT_VARIANTS(id) ON DELETE CASCADE
 );
+
 
 -- 5) Shopping bag
 

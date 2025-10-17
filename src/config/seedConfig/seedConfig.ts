@@ -26,8 +26,36 @@ export interface ISeed {
   coupons: number,
 }
 
+export const minimalSeedConfig: ISeed = {
+name: 'Minimal',
+customers: 10,
+addresses: 15,
+warehouses: 1,
+suppliers: 2,
+paymentMethods: 10,
+categories: 2,
+products: 5,
+productVariants: 10,
+productCategories: 10,
+inventory: 10,
+inventoryMovements: 10,
+purchaseOrdersToSuppliers: 2,
+purchaseOrderItems: 5,
+shoppingBags: 10,
+shoppingBagItems: 20,
+orders: 20,
+orderItems: 30,
+pays: 20,
+receipts: 20,
+shipment: 20,
+shipmentItems: 30,
+purchaseHistory: 20,
+reviews: 5,
+coupons: 2,
+};
+
 export const standardSeedConfig: ISeed = {
-  name: 'Max',
+  name: 'Standard',
   customers: 1000,
   addresses: 1500,
   warehouses: 5,
@@ -54,59 +82,30 @@ export const standardSeedConfig: ISeed = {
   coupons: 50
   };
 
-    
-export const minimalSeedConfig: ISeed = {
-  name: 'Min',
-  customers: 10,
-  addresses: 15,
-  warehouses: 1,
-  suppliers: 2,
-  paymentMethods: 10,
-  categories: 2,
-  products: 5,
-  productVariants: 10,
-  productCategories: 10,
-  inventory: 10,
-  inventoryMovements: 10,
-  purchaseOrdersToSuppliers: 2,
-  purchaseOrderItems: 5,
-  shoppingBags: 10,
-  shoppingBagItems: 20,
-  orders: 20,
-  orderItems: 30,
-  pays: 20,
-  receipts: 20,
-  shipment: 20,
-  shipmentItems: 30,
-  purchaseHistory: 20,
-  reviews: 5,
-  coupons: 2,
-};
-
-
-/*
-  SELECT * FROM CUSTOMERS;
-  SELECT * FROM ADDRESSES;
-  SELECT * FROM WAREHOUSES;
-  SELECT * FROM SUPPLIERS;
-  SELECT * FROM PAYMENT_METHODS;
-  SELECT * FROM PRODUCTS;
-  SELECT * FROM PRODUCT_VARIANTS;
-  SELECT * FROM CATEGORIES;
-  SELECT * FROM PRODUCT_CATEGORIES;
-  SELECT * FROM INVENTORY;
-  SELECT * FROM INVENTORY_MOVEMENTS;
-  SELECT * FROM PURCHASE_ORDERS_TO_SUPPLIERS;
-  SELECT * FROM PURCHASE_ORDER_ITEMS;
-  SELECT * FROM SHOPPING_BAG;
-  SELECT * FROM SHOPPING_BAG_ITEMS;
-  SELECT * FROM ORDERS;
-  SELECT * FROM ORDER_ITEMS;
-  SELECT * FROM PAY;
-  SELECT * FROM RECEIPT;
-  SELECT * FROM SHIPMENTS;
-  SELECT * FROM SHIPMENT_ITEMS;
-  SELECT * FROM PURCHASE_HISTORY;
-  SELECT * FROM REVIEWS;
-  SELECT * FROM COUPONS;
-*/
+export const ultraSeedConfig: ISeed = {
+  name: 'ultra',
+  customers: 100000,
+  addresses: 150000,
+  warehouses: 500,
+  suppliers: 2000,
+  paymentMethods: 100000,
+  categories: 1500,
+  products: 20000,
+  productVariants: 40000,
+  productCategories: 25000,
+  inventory: 100000,
+  inventoryMovements: 100000,
+  purchaseOrdersToSuppliers: 10000,
+  purchaseOrderItems: 30000,
+  shoppingBags: 80000,
+  shoppingBagItems: 160000,
+  orders: 500000,
+  orderItems: 75000,
+  pays: 500000,
+  receipts: 500000,
+  shipment:500000,
+  shipmentItems: 750000,
+  purchaseHistory: 500000,
+  reviews: 150000,
+  coupons: 5000
+  };
