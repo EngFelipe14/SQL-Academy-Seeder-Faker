@@ -6,6 +6,7 @@ import type { FieldPacket, ResultSetHeader } from 'mysql2';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { toMySQLDateTime } from '../../utils/mysqlDateFormat.ts';
 
 export class RepositoryWarehouses implements IRepoClass<IWarehouses> {
 
@@ -16,7 +17,7 @@ export class RepositoryWarehouses implements IRepoClass<IWarehouses> {
       const created = faker.date.past({ years: 10 });
 
       warehouses.push({
-        id: faker.string.nanoid(),
+        id: i + 1,
         name: faker.location.city(),
         country: faker.location.country(),
         city: faker.location.city(),
@@ -37,11 +38,11 @@ export class RepositoryWarehouses implements IRepoClass<IWarehouses> {
 
     const values = records.flatMap(r => [
       r.name,
-      r.country,
-      r.city,
       r.street,
+      r.city,
+      r.country,
       r.phone,
-      r.created_at
+      toMySQLDateTime(r.created_at)
     ]);
 
     const placeholders = records.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
@@ -49,9 +50,9 @@ export class RepositoryWarehouses implements IRepoClass<IWarehouses> {
     const query = `
       INSERT INTO WAREHOUSES (
         name,
-        country,
-        city,
         street,
+        city,
+        country,
         phone,
         created_at
       )
@@ -69,8 +70,15 @@ export class RepositoryWarehouses implements IRepoClass<IWarehouses> {
 
   async generateCSV(amount: number): Promise<void> {
     const data = this.generateData(amount)
-      .map(r => Object.values(r))
-      .map(r => r.join(','))
+      .map(r => [
+        `"${r.id}"`,
+        `"${r.name}"`,
+        `"${r.country}"`,
+        `"${r.city}"`,
+        `"${r.street}"`,
+        `"${r.phone}"`,
+        `"${toMySQLDateTime(r.created_at)}"`
+      ].join(','))
       .join('\n');
 
     const columns = 'id,name,country,city,street,phone,created_at\n';
@@ -82,9 +90,8 @@ export class RepositoryWarehouses implements IRepoClass<IWarehouses> {
 
     try {
       await fs.writeFile(filePath, completeData, 'utf-8');
-      console.log('Documento CSV creado en:', filePath);
     } catch (error) {
-      console.error('Error creando CSV de almacenes:', error);
+      console.error('Error creando CSV de Warehouses:', error);
       throw error;
     }
   }

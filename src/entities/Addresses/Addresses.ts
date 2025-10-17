@@ -1,4 +1,4 @@
-import type { IRepoClass } from '../../models/contrats/IRepoClass.ts';
+import type { IRepoClass, SeederOptions } from '../../models/contrats/IRepoClass.ts';
 import type { IAddresses } from '../../models/interfaces/modelEntities.ts';
 import { faker } from '@faker-js/faker';
 import { connectionDB as conn } from '../../config/connectionDB/connectionDB.ts';
@@ -6,17 +6,20 @@ import type { FieldPacket, ResultSetHeader } from 'mysql2';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { toMySQLDateTime } from '../../utils/mysqlDateFormat.ts';
 
 export class RepositoryAddresses implements IRepoClass<IAddresses> {
 
-  generateData(amount: number): IAddresses[] {
+  generateData(amount: number, options?: SeederOptions): IAddresses[] {
     const addresses: IAddresses[] = [];
 
+    if (!options?.customers) throw new Error('Faltan el parámetro "customers". \n Este es necesario para generar los datos con IDs válidos y mantener la integridad referencial.');
+    
     for (let i = 0; i < amount; i++) {
       const created = faker.date.past({ years: 10 });
         addresses.push({
-        id: faker.string.nanoid(),
-        customer_id: faker.number.int({ min: 1, max: 1000 }), // simula clientes existentes
+        id: i + 1,
+        customer_id: faker.number.int({min: 1, max: options?.customers}),
         country: faker.location.country(),
         state: faker.location.state(),
         city: faker.location.city(),
@@ -32,8 +35,10 @@ export class RepositoryAddresses implements IRepoClass<IAddresses> {
     return addresses;
   }
 
-  async insertData(amount: number): Promise<[ResultSetHeader, FieldPacket[]] | void> {
-    const records: Array<Omit<IAddresses, 'id'>> = this.generateData(amount).map(({ id, ...rest }) => rest);
+  async insertData(amount: number, options?: SeederOptions): Promise<[ResultSetHeader, FieldPacket[]] | void> {
+  
+
+    const records: Array<Omit<IAddresses, 'id'>> = this.generateData(amount, options).map(({ id, ...rest }) => rest);
 
     if (records.length !== amount)
       throw new Error('No se generaron correctamente los datos con faker');
@@ -48,7 +53,7 @@ export class RepositoryAddresses implements IRepoClass<IAddresses> {
       r.postal_code,
       r.is_default_shipping,
       r.is_default_billing,
-      r.created_at
+      toMySQLDateTime(r.created_at)
     ]);
 
     const placeholders = records.map(() =>
@@ -80,11 +85,22 @@ export class RepositoryAddresses implements IRepoClass<IAddresses> {
     }
   }
 
-  async generateCSV(amount: number): Promise<void> {
-    const data = this.generateData(amount)
-      .map(r => Object.values(r))
-      .map(r => r.join(','))
-      .join('\n');
+  async generateCSV(amount: number, options?: SeederOptions): Promise<void> {
+    const data = this.generateData(amount, options)
+  .map(r => [
+    `"${r.id}"`,
+    `"${r.customer_id}"`,
+    `"${r.country}"`,
+    `"${r.state}"`,
+    `"${r.city}"`,
+    `"${r.street}"`,
+    `"${r.label}"`,
+    `"${r.postal_code}"`,
+    `"${r.is_default_shipping}"`,
+    `"${r.is_default_billing}"`,
+    `"${toMySQLDateTime(r.created_at)}"`].join(','))
+  .join('\n');
+
 
     const columns = 'id,customer_id,country,state,city,street,label,postal_code,is_default_shipping,is_default_billing,created_at\n';
     const completeData = columns + data;
@@ -95,9 +111,8 @@ export class RepositoryAddresses implements IRepoClass<IAddresses> {
 
     try {
       await fs.writeFile(filePath, completeData, 'utf-8');
-      console.log('Documento CSV creado en:', filePath);
     } catch (error) {
-      console.error('Error creando CSV de direcciones:', error);
+      console.error('Error creando CSV de Addresses:', error);
       throw error;
     }
   }

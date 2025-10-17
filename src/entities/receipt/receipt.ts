@@ -1,4 +1,4 @@
-import type { IRepoClass } from '../../models/contrats/IRepoClass.ts';
+import type { IRepoClass, SeederOptions } from '../../models/contrats/IRepoClass.ts';
 import type { Ireceipt } from '../../models/interfaces/modelEntities.ts';
 import { faker } from '@faker-js/faker';
 import { connectionDB as conn } from '../../config/connectionDB/connectionDB.ts';
@@ -6,52 +6,51 @@ import type { FieldPacket, ResultSetHeader } from 'mysql2';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { toMySQLDateTime } from '../../utils/mysqlDateFormat.ts';
 
 export class RepositoryReceipt implements IRepoClass<Ireceipt> {
 
-  generateData(amount: number): Ireceipt[] {
+  generateData(amount: number, options?: SeederOptions): Ireceipt[] {
     const receipts: Ireceipt[] = [];
 
-    for (let i = 0; i < amount; i++) {
-      const issuedAt = faker.date.past({ years: 2 });
+    if (!options?.orders || !options?.pays) throw new Error('Faltan los parámetros "orders" o "pays". \n Estos son necesarios para generar los datos con IDs válidos y mantener la integridad referencial.');
 
-      receipts.push({
-        id: faker.string.nanoid(),
-        order_id: faker.number.int({ min: 1, max: 5000 }),
-        payment_id: faker.number.int({ min: 1, max: 5000 }),
-        receipt_number: `R-${faker.string.alphanumeric({ length: 10 }).toUpperCase()}`,
-        issued_at: issuedAt,
-        metadata: JSON.parse(
-          JSON.stringify({
+    for (let i = 0; i < amount; i++) {
+      const metadata = {
             issuer: faker.company.name(),
             note: faker.lorem.sentence(),
             digital_signature: faker.string.hexadecimal({ length: 16 }),
-          })
-        )
+          } as unknown as JSON;
+
+      receipts.push({
+        id: i + 1,
+        order_id: faker.number.int({ min: 1, max: options.orders }),
+        payment_id: faker.number.int({ min: 1, max: options.pays }),
+        receipt_number: faker.string.alphanumeric({ length: 10 }),
+        issued_at: faker.date.past({ years: 9 }),
+        metadata: metadata
       });
     }
 
     return receipts;
   }
 
-  async insertData(amount: number): Promise<[ResultSetHeader, FieldPacket[]] | void> {
-    const records = this.generateData(amount);
+  async insertData(amount: number, options?: SeederOptions): Promise<[ResultSetHeader, FieldPacket[]] | void> {
+    const records = this.generateData(amount, options).map(({id, ...rest}) => rest);
     if (records.length !== amount) throw new Error('No se generaron correctamente los recibos');
 
     const values = records.flatMap(r => [
-      r.id,
       r.order_id,
       r.payment_id,
       r.receipt_number,
-      r.issued_at,
+      toMySQLDateTime(r.issued_at),
       JSON.stringify(r.metadata)
     ]);
 
-    const placeholders = records.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
+    const placeholders = records.map(() => '(?, ?, ?, ?, ?)').join(', ');
 
     const query = `
       INSERT INTO RECEIPT (
-        id,
         order_id,
         payment_id,
         receipt_number,
@@ -70,15 +69,15 @@ export class RepositoryReceipt implements IRepoClass<Ireceipt> {
     }
   }
 
-  async generateCSV(amount: number): Promise<void> {
-    const data = this.generateData(amount)
+  async generateCSV(amount: number, options?: SeederOptions): Promise<void> {
+    const data = this.generateData(amount, options)
       .map(r => [
-        r.id,
-        r.order_id,
-        r.payment_id,
-        r.receipt_number,
-        r.issued_at.toISOString(),
-        JSON.stringify(r.metadata).replace(/,/g, ';') // Evita romper el CSV
+        `"${r.id}"`,
+        `"${r.order_id}"`,
+        `"${r.payment_id}"`,
+        `"${r.receipt_number}"`,
+        `"${toMySQLDateTime(r.issued_at)}"`,
+        `"${JSON.stringify(r.metadata)}"`
       ].join(','))
       .join('\n');
 
@@ -91,9 +90,8 @@ export class RepositoryReceipt implements IRepoClass<Ireceipt> {
 
     try {
       await fs.writeFile(filePath, completeData, 'utf-8');
-      console.log('Documento CSV creado en:', filePath);
     } catch (error) {
-      console.error('Error creando CSV de RECEIPT:', error);
+      console.error('Error creando CSV de Receipt:', error);
       throw error;
     }
   }

@@ -1,5 +1,5 @@
 interface ICustomers {
-  id: string,
+  id: number,
   email: string,
   password_hash: string,
   first_name: string,
@@ -11,7 +11,7 @@ interface ICustomers {
 };
 
 interface IAddresses {
-  id: string,
+  id: number,
   customer_id: number,
   country: string,
   state: string,
@@ -25,7 +25,7 @@ interface IAddresses {
 };
 
 interface IWarehouses {
-  id: string,
+  id: number,
   name: string,
   country: string,
   city: string,
@@ -35,7 +35,7 @@ interface IWarehouses {
 };
 
 interface ISuppliers {
-  id: string,
+  id: number,
   name: string,
   contact_name: string,
   email: string,
@@ -44,25 +44,24 @@ interface ISuppliers {
   created_at: Date
 };
 
-interface IPaymentMethods {
-  id: string,
-  customer_id?: number,
+interface IPaymentMethods {  //Se puede refactorizar provider y name para que sea un ENUM con los nombres de las opciones existentes.
+  id: number,
   name: string,
   provider: string,
-  datails: JSON,
-  is_active: boolean
+  details: JSON,
+  is_active: boolean,
+  created_at: Date
 };
 
 interface ICategories {
-  id: string,
+  id: number,
   name: string,
   slug: string,
-  created_at: Date,
-  updated_at: Date
+  created_at: Date
 };
 
 interface IProducts {
-  id: string,
+  id: number,
   sku: string,
   name: string,
   description: string,
@@ -73,7 +72,7 @@ interface IProducts {
 };
 
 interface IProductVariants {
-  id: string,
+  id: number,
   product_id: number,
   sku: string,
   name: string,
@@ -89,19 +88,31 @@ interface IProductCategories {
 };
 
 interface IInventory {
-  id: string,
+  id: number,
   product_variant_id: number,
   warehouse_id: number,
   quantity_available: number,
   quantity_reserved: number,
-  update_at: Date,
+  updated_at: Date,
 }
 
+export interface IInventoryMovements {
+  id: number;
+  product_variant_id: number;
+  warehouse_id: number;
+  change_qty: number;
+  movement_type: 'PURCHASE_ORDER' | 'SALE' | 'RETURN' | 'ADJUSTMENT' | 'TRANSFER' | 'RESERVATION' | 'RELEASE';
+  reference_id?: number | null;
+  notes?: string | null;
+  created_at: Date;
+}
+
+
 interface IPurchaseOrdersToSuppliers {
-  id: string,
+  id: number,
   supplier_id: number,
   po_number: string,
-  status: 'created' | 'send' | 'received' | 'partially_received' | 'cancelled',
+  status: 'created' | 'sent' | 'received' | 'partially_received' | 'cancelled',
   total_amount: number,
   expected_delivery_date: Date | null,
   created_at: Date
@@ -117,16 +128,16 @@ interface IPurchaseOrderItems {
 };
 
 interface IShoppingBag {
-  id: string,
+  id: number,
   customer_id: number,
-  session_id: number,
+  session_id: string,
   status: 'active' | 'converted' |'abandoned',
   created_at: Date,
   updated_at: Date
 };
 
 interface IShoppingBagItems {
-  id: string,
+  id: number,
   shopping_bag_id: number,
   product_variant_id: number,
   quantity: number,
@@ -135,8 +146,8 @@ interface IShoppingBagItems {
 };
 
 interface IOrders {
-  id: string,
-  order_number: number,
+  id: number,
+  order_number: string,
   customer_id: number,
   billing_address_id: number,
   shipping_address_id: number,
@@ -151,7 +162,7 @@ interface IOrders {
 };
 
 interface IOrderItems {
-  id: string,
+  id: number,
   order_id: number,
   product_variant_id: number,
   quantity: number,
@@ -161,19 +172,19 @@ interface IOrderItems {
 };
 
 interface IPay {
-  id: string,
+  id: number,
   order_id: number,
   payment_method_id: number,
   amount: number,
-  currency: string,
+  currency: 'USD' | 'EUR' | 'COP' | 'MXN',
   status: 'pending' | 'authorized' | 'captured' | 'failed' | 'refunded',
-  transaction_id: number,
+  transaction_id: string,
   paid_at: Date,
   created_at: Date
 };
 
 interface Ireceipt {
-  id: string,
+  id: number,
   order_id: number,
   payment_id: number,
   receipt_number: string,
@@ -181,8 +192,21 @@ interface Ireceipt {
   metadata: JSON
 };
 
+interface IShipment {
+  id: number,
+  order_id: number,
+  shipment_number: string,
+  carrier: string,
+  tracking_number: string,
+  status: 'created' | 'in_transit' | 'delivered' | 'returned',
+  from_warehouse_id: number,
+  shipped_at: Date,
+  delivered_at: Date
+}
+
+
 interface IShipmentItems {
-  id: string,
+  id: number,
   shipment_id: number,
   order_item_id: number,
   quantity: number
@@ -197,18 +221,18 @@ interface IPurchaseHistory {
 };
 
 interface IReviews {
-  id: string,
+  id: number,
   customer_id: number,
   product_variant_id: number,
   product_id: number,
-  rating: boolean,
+  rating: 1 | 2 | 3 | 4 | 5,
   title: string,
   comment: string,
   created_at: Date
 };
 
 interface ICoupons {
-  id: string,
+  id: number,
   code: string,
   discount_type: 'percentage' | 'fixed',
   discount_value: number,
@@ -237,6 +261,7 @@ export {
   IOrderItems,
   IPay,
   Ireceipt,
+  IShipment,
   IShipmentItems,
   IPurchaseHistory,
   IReviews,

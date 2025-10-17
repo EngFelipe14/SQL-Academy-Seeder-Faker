@@ -1,19 +1,23 @@
-import type { IRepoClass } from '../../models/contrats/IRepoClass.ts';
+import type { IRepoClass, SeederOptions } from '../../models/contrats/IRepoClass.ts';
 import type { IOrders } from '../../models/interfaces/modelEntities.ts';
-import { faker } from '@faker-js/faker';
+import { faker} from '@faker-js/faker';
 import { connectionDB as conn } from '../../config/connectionDB/connectionDB.ts';
 import type { FieldPacket, ResultSetHeader } from 'mysql2';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { toMySQLDateTime } from '../../utils/mysqlDateFormat.ts';
 
 export class RepositoryOrders implements IRepoClass<IOrders> {
 
-  generateData(amount: number): IOrders[] {
+  generateData(amount: number, options?: SeederOptions): IOrders[] {
     const orders: IOrders[] = [];
 
+    if (!options?.customers || !options?.addresses || !options?.paymentMethods) throw new Error('Faltan los parámetros "customers",  "addresses" o "paymentMethods". \n Estos son necesarios para generar los datos con IDs válidos y mantener la integridad referencial.');
+
+
     for (let i = 0; i < amount; i++) {
-      const createdAt = faker.date.past({ years: 1 });
+      const createdAt = faker.date.past({ years: 9 });
 
       const subtotal = faker.number.float({ min: 20, max: 1000});
       const shippingCost = faker.number.float({ min: 0, max: 50});
@@ -21,11 +25,11 @@ export class RepositoryOrders implements IRepoClass<IOrders> {
       const total = subtotal + shippingCost + taxAmount;
 
       orders.push({
-        id: faker.string.nanoid(),
-        order_number: faker.number.int({ min: 100000, max: 999999 }),
-        customer_id: faker.number.int({ min: 1, max: 5000 }),
-        billing_address_id: faker.number.int({ min: 1, max: 5000 }),
-        shipping_address_id: faker.number.int({ min: 1, max: 5000 }),
+        id: i + 1,
+        order_number: faker.string.nanoid(10),
+        customer_id: faker.number.int({ min: 1, max: options.customers }),
+        billing_address_id: faker.number.int({ min: 1, max: options.addresses }),
+        shipping_address_id: faker.number.int({ min: 1, max: options.addresses }),
         status: faker.helpers.arrayElement([
           'pending',
           'paid',
@@ -39,7 +43,7 @@ export class RepositoryOrders implements IRepoClass<IOrders> {
         shipping_cost: shippingCost,
         tax_amount: taxAmount,
         total,
-        payment_method_id: faker.number.int({ min: 1, max: 5000 }),
+        payment_method_id: faker.number.int({ min: 1, max: options.paymentMethods }),
         created_at: createdAt,
         updated_at: faker.date.between({ from: createdAt, to: new Date() })
       });
@@ -48,14 +52,13 @@ export class RepositoryOrders implements IRepoClass<IOrders> {
     return orders;
   }
 
-  async insertData(amount: number): Promise<[ResultSetHeader, FieldPacket[]] | void> {
-    const records = this.generateData(amount);
+  async insertData(amount: number, options?: SeederOptions): Promise<[ResultSetHeader, FieldPacket[]] | void> {
+    const records = this.generateData(amount, options).map(({id, ...rest}) => rest);
 
     if (records.length !== amount)
       throw new Error('No se generaron correctamente las órdenes');
 
     const values = records.flatMap(r => [
-      r.id,
       r.order_number,
       r.customer_id,
       r.billing_address_id,
@@ -66,15 +69,14 @@ export class RepositoryOrders implements IRepoClass<IOrders> {
       r.tax_amount,
       r.total,
       r.payment_method_id,
-      r.created_at,
-      r.updated_at
+      toMySQLDateTime(r.created_at),
+      toMySQLDateTime(r.updated_at)
     ]);
 
-    const placeholders = records.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+    const placeholders = records.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
 
     const query = `
       INSERT INTO ORDERS (
-        id,
         order_number,
         customer_id,
         billing_address_id,
@@ -100,11 +102,23 @@ export class RepositoryOrders implements IRepoClass<IOrders> {
     }
   }
 
-  async generateCSV(amount: number): Promise<void> {
-    const data = this.generateData(amount)
-      .map(r =>
-        Object.values(r).map(v => (v instanceof Date ? v.toISOString() : v ?? '')).join(',')
-      )
+  async generateCSV(amount: number, options?: SeederOptions): Promise<void> {
+    const data = this.generateData(amount, options)
+      .map(r => [
+        `"${r.id}"`,
+        `"${r.order_number}"`,
+        `"${r.customer_id}"`,
+        `"${r.billing_address_id}"`,
+        `"${r.shipping_address_id}"`,
+        `"${r.status}"`,
+        `"${r.subtotal}"`,
+        `"${r.shipping_cost}"`,
+        `"${r.tax_amount}"`,
+        `"${r.total}"`,
+        `"${r.payment_method_id}"`,
+        `"${toMySQLDateTime(r.created_at)}"`,
+        `"${toMySQLDateTime(r.updated_at)}"`
+      ].join(','))
       .join('\n');
 
     const columns =
@@ -117,9 +131,8 @@ export class RepositoryOrders implements IRepoClass<IOrders> {
 
     try {
       await fs.writeFile(filePath, completeData, 'utf-8');
-      console.log('Documento CSV creado en:', filePath);
     } catch (error) {
-      console.error('Error creando CSV de ORDERS:', error);
+      console.error('Error creando CSV de Orders:', error);
       throw error;
     }
   }

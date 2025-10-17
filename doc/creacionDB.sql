@@ -56,7 +56,7 @@ CREATE TABLE SUPPLIERS (
 
 CREATE TABLE PAYMENT_METHODS (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(100) NOT NULL, -- e.g. "Credit card", "PayPal", "Bank transfer"
+  name VARCHAR(100) NOT NULL,
   provider VARCHAR(100),
   details JSON NULL,
   is_active TINYINT DEFAULT 1,
@@ -72,7 +72,7 @@ CREATE TABLE PRODUCTS (
   name VARCHAR(255) NOT NULL,
   description TEXT,
   base_price DECIMAL(12,2) NOT NULL DEFAULT 0.00, -- precio base
-  active TINYINT DEFAULT 1,
+  is_active TINYINT DEFAULT 1,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -113,11 +113,13 @@ CREATE TABLE INVENTORY (
   warehouse_id INT NOT NULL,
   quantity_available INT NOT NULL DEFAULT 0,
   quantity_reserved INT NOT NULL DEFAULT 0,
-  last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_variant_warehouse (product_variant_id,warehouse_id),
   FOREIGN KEY (product_variant_id) REFERENCES PRODUCT_VARIANTS(id) ON DELETE CASCADE,
   FOREIGN KEY (warehouse_id) REFERENCES WAREHOUSES(id) ON DELETE CASCADE
 );
+
+
 
 CREATE TABLE INVENTORY_MOVEMENTS (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -129,11 +131,8 @@ CREATE TABLE INVENTORY_MOVEMENTS (
   notes VARCHAR(500) NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (product_variant_id) REFERENCES PRODUCT_VARIANTS(id) ON DELETE CASCADE,
-  FOREIGN KEY (warehouse_id) REFERENCES WAREHOUSES(id) ON DELETE CASCADE,
-  INDEX (product_variant_id),
-  INDEX (warehouse_id)
+  FOREIGN KEY (warehouse_id) REFERENCES WAREHOUSES(id) ON DELETE CASCADE
 );
-
 
 -- 4) Órdenes de compra a proveedores
 
@@ -158,7 +157,6 @@ CREATE TABLE PURCHASE_ORDER_ITEMS (
   FOREIGN KEY (purchase_order_id) REFERENCES PURCHASE_ORDERS_TO_SUPPLIERS(id) ON DELETE CASCADE,
   FOREIGN KEY (product_variant_id) REFERENCES PRODUCT_VARIANTS(id) ON DELETE CASCADE
 );
-
 
 -- 5) Shopping bag
 
@@ -226,7 +224,7 @@ CREATE TABLE PAY (
   order_id INT NOT NULL,
   payment_method_id INT NULL,
   amount DECIMAL(12,2) NOT NULL,
-  currency VARCHAR(10) DEFAULT 'USD',
+  currency ENUM('USD', 'EUR', 'COP', 'MXN') DEFAULT 'USD',
   status ENUM('pending','authorized','captured','failed','refunded') DEFAULT 'pending',
   transaction_id VARCHAR(255) NULL,
   paid_at DATETIME NULL,

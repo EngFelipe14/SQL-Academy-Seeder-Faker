@@ -6,6 +6,7 @@ import type { FieldPacket, ResultSetHeader } from 'mysql2';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { toMySQLDateTime } from '../../utils/mysqlDateFormat.ts';
 
 export class RepositoryCategories implements IRepoClass<ICategories> {
 
@@ -13,17 +14,15 @@ export class RepositoryCategories implements IRepoClass<ICategories> {
     const categories: ICategories[] = [];
 
     for (let i = 0; i < amount; i++) {
-      const created = faker.date.past({ years: 5 });
 
       const name = faker.commerce.department();
-      const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '');
+      const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '') + faker.string.alphanumeric(10);
 
       categories.push({
-        id: faker.string.nanoid(),
+        id: i + 1,
         name,
         slug,
-        created_at: created,
-        updated_at: faker.date.between({ from: created, to: new Date() })
+        created_at: faker.date.past({ years: 10 })
       });
     }
 
@@ -39,18 +38,16 @@ export class RepositoryCategories implements IRepoClass<ICategories> {
     const values = records.flatMap(r => [
       r.name,
       r.slug,
-      r.created_at,
-      r.updated_at
+      toMySQLDateTime(r.created_at)
     ]);
 
-    const placeholders = records.map(() => '(?, ?, ?, ?)').join(', ');
+    const placeholders = records.map(() => '(?, ?, ?)').join(', ');
 
     const query = `
       INSERT INTO CATEGORIES (
         name,
         slug,
-        created_at,
-        updated_at
+        created_at
       )
       VALUES ${placeholders}
     `;
@@ -66,11 +63,15 @@ export class RepositoryCategories implements IRepoClass<ICategories> {
 
   async generateCSV(amount: number): Promise<void> {
     const data = this.generateData(amount)
-      .map(r => Object.values(r))
-      .map(r => r.join(','))
+      .map(r => [
+        `"${r.id}"`,
+        `"${r.name}"`,
+        `"${r.slug}"`,
+        `"${toMySQLDateTime(r.created_at)}"`
+      ].join(','))
       .join('\n');
 
-    const columns = 'id,name,slug,created_at,updated_at\n';
+    const columns = 'id,name,slug,created_at\n';
     const completeData = columns + data;
 
     const __filename = fileURLToPath(import.meta.url);
@@ -79,9 +80,8 @@ export class RepositoryCategories implements IRepoClass<ICategories> {
 
     try {
       await fs.writeFile(filePath, completeData, 'utf-8');
-      console.log('Documento CSV creado en:', filePath);
     } catch (error) {
-      console.error('Error creando CSV de categorías:', error);
+      console.error('Error creando CSV de Categories:', error);
       throw error;
     }
   }

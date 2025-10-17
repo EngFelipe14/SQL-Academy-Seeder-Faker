@@ -1,4 +1,4 @@
-import type { IRepoClass } from '../../models/contrats/IRepoClass.ts';
+import type { IRepoClass, SeederOptions } from '../../models/contrats/IRepoClass.ts';
 import type { IProductCategories } from '../../models/interfaces/modelEntities.ts';
 import { faker } from '@faker-js/faker';
 import { connectionDB as conn } from '../../config/connectionDB/connectionDB.ts';
@@ -9,21 +9,32 @@ import { fileURLToPath } from 'url';
 
 export class RepositoryProductCategories implements IRepoClass<IProductCategories> {
 
-  generateData(amount: number): IProductCategories[] {
+  generateData(amount: number, options?: SeederOptions): IProductCategories[] {
     const relations: IProductCategories[] = [];
 
-    for (let i = 0; i < amount; i++) {
-      relations.push({
-        product_id: faker.number.int({ min: 1, max: 1000 }),
-        category_id: faker.number.int({ min: 1, max: 50 })
-      });
+    if (!options?.products || !options?.categories) throw new Error('Faltan los parámetros "products" o "categories". \n Estos son necesarios para generar los datos con IDs válidos y mantener la integridad referencial.');
+
+    const uniqueRelations = new Set<string>();
+
+    while (relations.length < amount) {
+      const product_id = faker.number.int({ min: 1, max: options.products });
+      const category_id = faker.number.int({ min: 1, max: options.categories });
+      const relationKey = `${product_id}-${category_id}`;
+
+      if (!uniqueRelations.has(relationKey)) {
+        uniqueRelations.add(relationKey);
+        relations.push({
+          product_id,
+          category_id
+        });
+      }
     }
 
     return relations;
   }
 
-  async insertData(amount: number): Promise<[ResultSetHeader, FieldPacket[]] | void> {
-    const records = this.generateData(amount);
+  async insertData(amount: number, options?: SeederOptions): Promise<[ResultSetHeader, FieldPacket[]] | void> {
+    const records = this.generateData(amount, options);
 
     if (records.length !== amount)
       throw new Error('No se generaron correctamente las relaciones producto-categoría');
@@ -48,10 +59,12 @@ export class RepositoryProductCategories implements IRepoClass<IProductCategorie
     }
   }
 
-  async generateCSV(amount: number): Promise<void> {
-    const data = this.generateData(amount)
-      .map(r => Object.values(r))
-      .map(r => r.join(','))
+  async generateCSV(amount: number, options?: SeederOptions): Promise<void> {
+    const data = this.generateData(amount, options)
+      .map(r => [
+        `"${r.product_id}"`,
+        `"${r.category_id}"`
+      ].join(','))
       .join('\n');
 
     const columns = 'product_id,category_id\n';
@@ -63,9 +76,8 @@ export class RepositoryProductCategories implements IRepoClass<IProductCategorie
 
     try {
       await fs.writeFile(filePath, completeData, 'utf-8');
-      console.log('Documento CSV creado en:', filePath);
     } catch (error) {
-      console.error('Error creando CSV de relaciones producto-categoría:', error);
+      console.error('Error creando CSV de ProductCategories:', error);
       throw error;
     }
   }

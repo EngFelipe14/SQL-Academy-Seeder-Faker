@@ -6,10 +6,11 @@ import type { FieldPacket, ResultSetHeader } from 'mysql2';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { toMySQLDateTime } from '../../utils/mysqlDateFormat.ts';
 
 export class RepositoryPaymentMethods implements IRepoClass<IPaymentMethods> {
 
-  generateData(amount: number): IPaymentMethods[] {
+  generateData(amount: number): IPaymentMethods[] { 
     const paymentMethods: IPaymentMethods[] = [];
 
     for (let i = 0; i < amount; i++) {
@@ -32,17 +33,17 @@ export class RepositoryPaymentMethods implements IRepoClass<IPaymentMethods> {
 
       const details = {
         cardNumber: faker.finance.creditCardNumber({ issuer: provider }),
-        expiration: faker.date.future({ years: 5 }).toISOString().split('T')[0],
+        expiration: toMySQLDateTime(faker.date.future({ years: 5 })),
         cvv: faker.string.numeric(3),
       };
 
       paymentMethods.push({
-        id: faker.string.nanoid(),
-        customer_id: faker.number.int({ min: 1, max: 1000 }),
+        id: i + 1,
         name: methodName,
         provider,
-        datails: details as unknown as JSON,
-        is_active: faker.datatype.boolean({ probability: 0.8 })
+        details: details as unknown as JSON,
+        is_active: faker.datatype.boolean({ probability: 0.8 }),
+        created_at: faker.date.past({years: 10})
       });
     }
 
@@ -56,22 +57,22 @@ export class RepositoryPaymentMethods implements IRepoClass<IPaymentMethods> {
       throw new Error('No se generaron correctamente los datos con faker');
 
     const values = records.flatMap(r => [
-      r.customer_id ?? null,
       r.name,
       r.provider,
-      JSON.stringify(r.datails),
-      r.is_active
+      JSON.stringify(r.details),
+      r.is_active,
+      toMySQLDateTime(r.created_at)
     ]);
 
     const placeholders = records.map(() => '(?, ?, ?, ?, ?)').join(', ');
 
     const query = `
       INSERT INTO PAYMENT_METHODS (
-        customer_id,
         name,
         provider,
-        datails,
-        is_active
+        details,
+        is_active,
+        created_at
       )
       VALUES ${placeholders}
     `;
@@ -87,12 +88,14 @@ export class RepositoryPaymentMethods implements IRepoClass<IPaymentMethods> {
 
   async generateCSV(amount: number): Promise<void> {
     const data = this.generateData(amount)
-      .map(r => ({
-        ...r,
-        datails: JSON.stringify(r.datails)
-      }))
-      .map(r => Object.values(r))
-      .map(r => r.join(','))
+      .map(r => [
+        `"${r.id}"`,
+        `"${r.name}"`,
+        `"${r.provider}"`,
+        `"${JSON.stringify(r.details)}"`,
+        `"${r.is_active}"`,
+        `"${toMySQLDateTime(r.created_at)}"`
+      ].join(','))
       .join('\n');
 
     const columns = 'id,customer_id,name,provider,datails,is_active\n';
@@ -104,9 +107,8 @@ export class RepositoryPaymentMethods implements IRepoClass<IPaymentMethods> {
 
     try {
       await fs.writeFile(filePath, completeData, 'utf-8');
-      console.log('Documento CSV creado en:', filePath);
     } catch (error) {
-      console.error('Error creando CSV de métodos de pago:', error);
+      console.error('Error creando CSV de PaymentMethods:', error);
       throw error;
     }
   }

@@ -6,6 +6,7 @@ import type { FieldPacket, ResultSetHeader } from 'mysql2';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { toMySQLDateTime } from '../../utils/mysqlDateFormat.ts';
 
 export class RepositoryCoupons implements IRepoClass<ICoupons> {
 
@@ -14,20 +15,16 @@ export class RepositoryCoupons implements IRepoClass<ICoupons> {
 
     for (let i = 0; i < amount; i++) {
       const createdAt = faker.date.past({ years: 2 });
-      const expiresAt = faker.date.future({ years: 1, refDate: createdAt });
-      const discountType = faker.helpers.arrayElement<ICoupons['discount_type']>(['percentage', 'fixed']);
-      const discountValue = discountType === 'percentage'
-        ? faker.number.int({ min: 5, max: 50 })
-        : faker.number.float({ min: 5, max: 200});
+      const discountType: ICoupons['discount_type'][] = ['percentage', 'fixed'];
 
       coupons.push({
-        id: faker.string.nanoid(),
-        code: faker.string.alphanumeric({ length: 8 }).toUpperCase(),
-        discount_type: discountType,
-        discount_value: discountValue,
+        id: i + 1,
+        code: faker.string.alphanumeric({ length: 8 }),
+        discount_type: faker.helpers.arrayElement(discountType),
+        discount_value: faker.number.float({ min: 5, max: 200}),
         min_order_amount: faker.number.float({ min: 20, max: 300}),
-        expires_at: expiresAt,
-        usage_limit: faker.number.int({ min: 1, max: 100 }),
+        expires_at: faker.date.future({ years: 1, refDate: createdAt }),
+        usage_limit: faker.number.int({ min: 1, max: 50 }),
         created_at: createdAt
       });
     }
@@ -36,26 +33,24 @@ export class RepositoryCoupons implements IRepoClass<ICoupons> {
   }
 
   async insertData(amount: number): Promise<[ResultSetHeader, FieldPacket[]] | void> {
-    const records = this.generateData(amount);
+    const records = this.generateData(amount).map(({id, ...rest}) => rest);
     if (records.length !== amount)
       throw new Error('No se generaron correctamente los datos de cupones');
 
     const values = records.flatMap(r => [
-      r.id,
       r.code,
       r.discount_type,
       r.discount_value,
       r.min_order_amount,
-      r.expires_at,
+      toMySQLDateTime(r.expires_at),
       r.usage_limit,
-      r.created_at
+      toMySQLDateTime(r.created_at)
     ]);
 
-    const placeholders = records.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+    const placeholders = records.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
 
     const query = `
       INSERT INTO COUPONS (
-        id,
         code,
         discount_type,
         discount_value,
@@ -79,14 +74,14 @@ export class RepositoryCoupons implements IRepoClass<ICoupons> {
   async generateCSV(amount: number): Promise<void> {
     const data = this.generateData(amount)
       .map(r => [
-        r.id,
-        r.code,
-        r.discount_type,
-        r.discount_value,
-        r.min_order_amount,
-        r.expires_at.toISOString(),
-        r.usage_limit,
-        r.created_at.toISOString()
+        `"${r.id}"`,
+        `"${r.code}"`,
+        `"${r.discount_type}"`,
+        `"${r.discount_value}"`,
+        `"${r.min_order_amount}"`,
+        `"${toMySQLDateTime(r.expires_at)}"`,
+        `"${r.usage_limit}"`,
+        `"${toMySQLDateTime(r.created_at)}"`
       ].join(','))
       .join('\n');
 
@@ -99,9 +94,8 @@ export class RepositoryCoupons implements IRepoClass<ICoupons> {
 
     try {
       await fs.writeFile(filePath, completeData, 'utf-8');
-      console.log('Documento CSV creado en:', filePath);
     } catch (error) {
-      console.error('Error creando CSV de COUPONS:', error);
+      console.error('Error creando CSV de Coupons:', error);
       throw error;
     }
   }

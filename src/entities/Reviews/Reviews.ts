@@ -1,4 +1,4 @@
-import type { IRepoClass } from '../../models/contrats/IRepoClass.ts';
+import type { IRepoClass, SeederOptions } from '../../models/contrats/IRepoClass.ts';
 import type { IReviews } from '../../models/interfaces/modelEntities.ts';
 import { faker } from '@faker-js/faker';
 import { connectionDB as conn } from '../../config/connectionDB/connectionDB.ts';
@@ -6,51 +6,51 @@ import type { FieldPacket, ResultSetHeader } from 'mysql2';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { toMySQLDateTime } from '../../utils/mysqlDateFormat.ts';
 
 export class RepositoryReviews implements IRepoClass<IReviews> {
 
-  generateData(amount: number): IReviews[] {
+  generateData(amount: number, options?: SeederOptions): IReviews[] {
     const reviews: IReviews[] = [];
 
-    for (let i = 0; i < amount; i++) {
-      const createdAt = faker.date.past({ years: 3 });
+    if (!options?.customers || !options?.productVariants || !options?.products) throw new Error('Faltan los parámetros "customers" o "productVariants". \n Estos son necesarios para generar los datos con IDs válidos y mantener la integridad referencial.');
 
+
+    for (let i = 0; i < amount; i++) {
       reviews.push({
-        id: faker.string.nanoid(),
-        customer_id: faker.number.int({ min: 1, max: 5000 }),
-        product_variant_id: faker.number.int({ min: 1, max: 5000 }),
-        product_id: faker.number.int({ min: 1, max: 5000 }),
-        rating: faker.datatype.boolean({ probability: 0.75 }), // mayoría positivos
+        id: i + 1,
+        customer_id: faker.number.int({ min: 1, max: options.customers }),
+        product_variant_id: faker.number.int({ min: 1, max: options.productVariants }),
+        product_id: faker.number.int({ min: 1, max: options.products }),
+        rating: faker.helpers.arrayElement([1, 2, 3, 4, 5]),
         title: faker.lorem.words({ min: 2, max: 6 }),
         comment: faker.lorem.sentences({ min: 1, max: 3 }),
-        created_at: createdAt
+        created_at: faker.date.past({ years: 9 })
       });
     }
 
     return reviews;
   }
 
-  async insertData(amount: number): Promise<[ResultSetHeader, FieldPacket[]] | void> {
-    const records = this.generateData(amount);
+  async insertData(amount: number, options?: SeederOptions): Promise<[ResultSetHeader, FieldPacket[]] | void> {
+    const records = this.generateData(amount, options).map(({id, ...rest}) => rest);
     if (records.length !== amount)
       throw new Error('No se generaron correctamente los datos de reviews');
 
     const values = records.flatMap(r => [
-      r.id,
       r.customer_id,
       r.product_variant_id,
       r.product_id,
       r.rating,
       r.title,
       r.comment,
-      r.created_at
+      toMySQLDateTime(r.created_at)
     ]);
 
-    const placeholders = records.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+    const placeholders = records.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
 
     const query = `
       INSERT INTO REVIEWS (
-        id,
         customer_id,
         product_variant_id,
         product_id,
@@ -71,17 +71,17 @@ export class RepositoryReviews implements IRepoClass<IReviews> {
     }
   }
 
-  async generateCSV(amount: number): Promise<void> {
-    const data = this.generateData(amount)
+  async generateCSV(amount: number, options?: SeederOptions): Promise<void> {
+    const data = this.generateData(amount, options)
       .map(r => [
-        r.id,
-        r.customer_id,
-        r.product_variant_id,
-        r.product_id,
-        r.rating,
-        `"${r.title.replace(/"/g, '""')}"`,
-        `"${r.comment.replace(/"/g, '""')}"`,
-        r.created_at.toISOString()
+        `"${r.id}"`,
+        `"${r.customer_id}"`,
+        `"${r.product_variant_id}"`,
+        `"${r.product_id}"`,
+        `"${r.rating}"`,
+        `"${r.title}"`,
+        `"${r.comment}"`,
+        `"${toMySQLDateTime(r.created_at)}"`
       ].join(','))
       .join('\n');
 
@@ -94,9 +94,8 @@ export class RepositoryReviews implements IRepoClass<IReviews> {
 
     try {
       await fs.writeFile(filePath, completeData, 'utf-8');
-      console.log('Documento CSV creado en:', filePath);
     } catch (error) {
-      console.error('Error creando CSV de REVIEWS:', error);
+      console.error('Error creando CSV de Reviews:', error);
       throw error;
     }
   }

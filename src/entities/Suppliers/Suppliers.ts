@@ -6,6 +6,7 @@ import type { FieldPacket, ResultSetHeader } from 'mysql2';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { toMySQLDateTime } from '../../utils/mysqlDateFormat.ts';
 
 export class RepositorySuppliers implements IRepoClass<ISuppliers> {
 
@@ -16,7 +17,7 @@ export class RepositorySuppliers implements IRepoClass<ISuppliers> {
       const created = faker.date.past({ years: 10 });
 
       suppliers.push({
-        id: faker.string.nanoid(),
+        id: i + 1,
         name: faker.company.name(),
         contact_name: faker.person.fullName(),
         email: faker.internet.email(),
@@ -41,7 +42,7 @@ export class RepositorySuppliers implements IRepoClass<ISuppliers> {
       r.email,
       r.phone,
       r.address,
-      r.created_at
+      toMySQLDateTime(r.created_at)
     ]);
 
     const placeholders = records.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
@@ -69,8 +70,15 @@ export class RepositorySuppliers implements IRepoClass<ISuppliers> {
 
   async generateCSV(amount: number): Promise<void> {
     const data = this.generateData(amount)
-      .map(r => Object.values(r))
-      .map(r => r.join(','))
+      .map(r => [
+        `"${r.id}"`,
+        `"${r.name}"`,
+        `"${r.contact_name}"`,
+        `"${r.email}"`,
+        `"${r.phone}"`,
+        `"${r.address}"`,
+        `"${toMySQLDateTime(r.created_at)}"`
+      ].join(','))
       .join('\n');
 
     const columns = 'id,name,contact_name,email,phone,address,created_at\n';
@@ -82,9 +90,8 @@ export class RepositorySuppliers implements IRepoClass<ISuppliers> {
 
     try {
       await fs.writeFile(filePath, completeData, 'utf-8');
-      console.log('Documento CSV creado en:', filePath);
     } catch (error) {
-      console.error('Error creando CSV de proveedores:', error);
+      console.error('Error creando CSV de Suppliers:', error);
       throw error;
     }
   }

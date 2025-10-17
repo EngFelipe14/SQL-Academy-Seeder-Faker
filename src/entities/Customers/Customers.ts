@@ -6,6 +6,7 @@ import type { ICustomers } from '../../models/interfaces/modelEntities.ts';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { toMySQLDateTime } from '../../utils/mysqlDateFormat.ts';
 
 export class RepositoryCustomers implements IRepoClass<ICustomers> {
 
@@ -15,7 +16,7 @@ export class RepositoryCustomers implements IRepoClass<ICustomers> {
 
     for (let i = 0; i < amount; i++) {
       customers.push({
-        id: faker.string.nanoid(),
+        id: i + 1,
         email: faker.internet.email(),
         password_hash: faker.string.alphanumeric(15),
         first_name: faker.person.firstName(),
@@ -30,7 +31,6 @@ export class RepositoryCustomers implements IRepoClass<ICustomers> {
     return customers;
   }
   
-
   async insertData (amount: number): Promise<[ResultSetHeader, FieldPacket[]] | void> {
     const records: Array<Omit<ICustomers, 'id'>> = this.generateData(amount).map(({id, ...rest}) => rest);
 
@@ -43,8 +43,8 @@ export class RepositoryCustomers implements IRepoClass<ICustomers> {
       r.last_name,
       r.phone,
       r.is_active,
-      r.created_at,
-      r.updated_at
+      toMySQLDateTime(r.created_at),
+      toMySQLDateTime(r.updated_at)
     ]);
 
     const placeholders = records.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
@@ -71,8 +71,17 @@ export class RepositoryCustomers implements IRepoClass<ICustomers> {
 
   async generateCSV (amount: number): Promise<void> {
     const data = this.generateData(amount)
-      .map(r => Object.values(r))
-      .map(r => r.join(','))
+      .map(r => [
+        `"${r.id}"`,
+        `"${r.email}"`,
+        `"${r.password_hash}"`,
+        `"${r.first_name}"`,
+        `"${r.last_name}"`,
+        `"${r.phone}"`,
+        `"${r.is_active}"`,
+        `"${toMySQLDateTime(r.created_at)}"`,
+        `"${toMySQLDateTime(r.updated_at)}"`
+      ].join(','))
       .join('\n');
 
     const columnsName = 'id,email,password_hash,first_name,last_name,phone,is_active,created_at,updated_at\n';
@@ -84,8 +93,8 @@ export class RepositoryCustomers implements IRepoClass<ICustomers> {
 
     try {
       await fs.writeFile(filePath, completeInformation, 'utf-8');
-      console.log('Documento CSV creado en:', filePath);
     } catch (error) {
+      console.error('Error creando CSV de Customers:', error);
       throw error;
     }
   }

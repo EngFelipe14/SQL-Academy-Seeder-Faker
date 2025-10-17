@@ -6,6 +6,7 @@ import type { FieldPacket, ResultSetHeader } from 'mysql2';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { toMySQLDateTime } from '../../utils/mysqlDateFormat.ts';
 
 export class RepositoryProducts implements IRepoClass<IProducts> {
 
@@ -13,15 +14,12 @@ export class RepositoryProducts implements IRepoClass<IProducts> {
     const products: IProducts[] = [];
 
     for (let i = 0; i < amount; i++) {
-      const created = faker.date.past({ years: 5 });
-
-      const name = faker.commerce.productName();
-      const sku = faker.string.alphanumeric({ length: 8, casing: 'upper' });
+      const created = faker.date.past({ years: 10 });
 
       products.push({
-        id: faker.string.nanoid(),
-        sku,
-        name,
+        id: i + 1,
+        sku: faker.string.alphanumeric({ length: 8, casing: 'upper' }),
+        name: faker.commerce.productName(),
         description: faker.commerce.productDescription(),
         base_price: parseFloat(faker.commerce.price({ min: 10, max: 2000, dec: 2 })),
         is_active: faker.datatype.boolean({ probability: 0.85 }),
@@ -45,8 +43,8 @@ export class RepositoryProducts implements IRepoClass<IProducts> {
       r.description,
       r.base_price,
       r.is_active,
-      r.created_at,
-      r.updated_at
+      toMySQLDateTime(r.created_at),
+      toMySQLDateTime(r.updated_at)
     ]);
 
     const placeholders = records.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
@@ -75,8 +73,16 @@ export class RepositoryProducts implements IRepoClass<IProducts> {
 
   async generateCSV(amount: number): Promise<void> {
     const data = this.generateData(amount)
-      .map(r => Object.values(r))
-      .map(r => r.join(','))
+      .map(r => [
+        `"${r.id}"`,
+        `"${r.sku}"`,
+        `"${r.name}"`,
+        `"${r.description}"`,
+        `"${r.base_price}"`,
+        `"${r.is_active}"`,
+        `"${toMySQLDateTime(r.created_at)}"`,
+        `"${toMySQLDateTime(r.updated_at)}"`
+      ].join(','))
       .join('\n');
 
     const columns = 'id,sku,name,description,base_price,is_active,created_at,updated_at\n';
@@ -88,9 +94,8 @@ export class RepositoryProducts implements IRepoClass<IProducts> {
 
     try {
       await fs.writeFile(filePath, completeData, 'utf-8');
-      console.log('Documento CSV creado en:', filePath);
     } catch (error) {
-      console.error('Error creando CSV de productos:', error);
+      console.error('Error creando CSV de Products:', error);
       throw error;
     }
   }

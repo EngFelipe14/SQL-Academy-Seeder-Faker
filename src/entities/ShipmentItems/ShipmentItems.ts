@@ -1,4 +1,4 @@
-import type { IRepoClass } from '../../models/contrats/IRepoClass.ts';
+import type { IRepoClass, SeederOptions } from '../../models/contrats/IRepoClass.ts';
 import type { IShipmentItems } from '../../models/interfaces/modelEntities.ts';
 import { faker } from '@faker-js/faker';
 import { connectionDB as conn } from '../../config/connectionDB/connectionDB.ts';
@@ -9,14 +9,16 @@ import { fileURLToPath } from 'url';
 
 export class RepositoryShipmentItems implements IRepoClass<IShipmentItems> {
 
-  generateData(amount: number): IShipmentItems[] {
+  generateData(amount: number, options?: SeederOptions): IShipmentItems[] {
     const shipmentItems: IShipmentItems[] = [];
+
+    if (!options?.orderItems || !options?.shipment) throw new Error('Faltan los parámetros "orderItems" o "shipment". \n Estos son necesarios para generar los datos con IDs válidos y mantener la integridad referencial.');
 
     for (let i = 0; i < amount; i++) {
       shipmentItems.push({
-        id: faker.string.nanoid(),
-        shipment_id: faker.number.int({ min: 1, max: 3000 }),
-        order_item_id: faker.number.int({ min: 1, max: 5000 }),
+        id: i + 1,
+        shipment_id: faker.number.int({min: 1, max: options.shipment}),
+        order_item_id: faker.number.int({ min: 1, max: options.orderItems }),
         quantity: faker.number.int({ min: 1, max: 20 })
       });
     }
@@ -24,8 +26,8 @@ export class RepositoryShipmentItems implements IRepoClass<IShipmentItems> {
     return shipmentItems;
   }
 
-  async insertData(amount: number): Promise<[ResultSetHeader, FieldPacket[]] | void> {
-    const records = this.generateData(amount);
+  async insertData(amount: number, options?: SeederOptions): Promise<[ResultSetHeader, FieldPacket[]] | void> {
+    const records = this.generateData(amount, options);
     if (records.length !== amount)
       throw new Error('No se generaron correctamente los datos de shipment items');
 
@@ -57,9 +59,14 @@ export class RepositoryShipmentItems implements IRepoClass<IShipmentItems> {
     }
   }
 
-  async generateCSV(amount: number): Promise<void> {
-    const data = this.generateData(amount)
-      .map(r => Object.values(r).join(','))
+  async generateCSV(amount: number, options?: SeederOptions): Promise<void> {
+    const data = this.generateData(amount, options)
+      .map(r => [
+        `"${r.id}"`,
+        `"${r.shipment_id}"`,
+        `"${r.order_item_id}"`,
+        `"${r.quantity}"`
+      ].join(','))
       .join('\n');
 
     const columns = 'id,shipment_id,order_item_id,quantity\n';
@@ -71,9 +78,8 @@ export class RepositoryShipmentItems implements IRepoClass<IShipmentItems> {
 
     try {
       await fs.writeFile(filePath, completeData, 'utf-8');
-      console.log('Documento CSV creado en:', filePath);
     } catch (error) {
-      console.error('Error creando CSV de SHIPMENT_ITEMS:', error);
+      console.error('Error creando CSV de ShipmentItems:', error);
       throw error;
     }
   }

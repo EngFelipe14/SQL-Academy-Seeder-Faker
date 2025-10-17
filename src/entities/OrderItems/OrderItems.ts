@@ -1,4 +1,4 @@
-import type { IRepoClass } from '../../models/contrats/IRepoClass.ts';
+import type { IRepoClass, SeederOptions } from '../../models/contrats/IRepoClass.ts';
 import type { IOrderItems } from '../../models/interfaces/modelEntities.ts';
 import { faker } from '@faker-js/faker';
 import { connectionDB as conn } from '../../config/connectionDB/connectionDB.ts';
@@ -9,8 +9,10 @@ import { fileURLToPath } from 'url';
 
 export class RepositoryOrderItems implements IRepoClass<IOrderItems> {
 
-  generateData(amount: number): IOrderItems[] {
+  generateData(amount: number, options?: SeederOptions): IOrderItems[] {
     const orderItems: IOrderItems[] = [];
+
+    if (!options?.orders || !options?.productVariants) throw new Error('Faltan los parámetros "orders" o "productVariants". \n Estos son necesarios para generar los datos con IDs válidos y mantener la integridad referencial.');
 
     for (let i = 0; i < amount; i++) {
       const quantity = faker.number.int({ min: 1, max: 10 });
@@ -18,9 +20,9 @@ export class RepositoryOrderItems implements IRepoClass<IOrderItems> {
       const lineTotal = quantity * unitPrice;
 
       orderItems.push({
-        id: faker.string.nanoid(),
-        order_id: faker.number.int({ min: 1, max: 5000 }),
-        product_variant_id: faker.number.int({ min: 1, max: 5000 }),
+        id: i + 1,
+        order_id: faker.number.int({ min: 1, max: options.orders }),
+        product_variant_id: faker.number.int({ min: 1, max: options.productVariants }),
         quantity,
         unit_price: unitPrice,
         line_total: lineTotal,
@@ -31,14 +33,13 @@ export class RepositoryOrderItems implements IRepoClass<IOrderItems> {
     return orderItems;
   }
 
-  async insertData(amount: number): Promise<[ResultSetHeader, FieldPacket[]] | void> {
-    const records = this.generateData(amount);
+  async insertData(amount: number, options?: SeederOptions): Promise<[ResultSetHeader, FieldPacket[]] | void> {
+    const records = this.generateData(amount, options).map(({id, ...rest}) => rest) ;
 
     if (records.length !== amount)
       throw new Error('No se generaron correctamente los items de orden');
 
     const values = records.flatMap(r => [
-      r.id,
       r.order_id,
       r.product_variant_id,
       r.quantity,
@@ -47,11 +48,10 @@ export class RepositoryOrderItems implements IRepoClass<IOrderItems> {
       r.sku_snapshot
     ]);
 
-    const placeholders = records.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
+    const placeholders = records.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
 
     const query = `
       INSERT INTO ORDER_ITEMS (
-        id,
         order_id,
         product_variant_id,
         quantity,
@@ -71,9 +71,17 @@ export class RepositoryOrderItems implements IRepoClass<IOrderItems> {
     }
   }
 
-  async generateCSV(amount: number): Promise<void> {
-    const data = this.generateData(amount)
-      .map(r => Object.values(r).join(','))
+  async generateCSV(amount: number, options?: SeederOptions): Promise<void> {
+    const data = this.generateData(amount, options)
+      .map(r => [
+        `"${r.id}"`,
+        `"${r.order_id}"`,
+        `"${r.product_variant_id}"`,
+        `"${r.quantity}"`,
+        `"${r.unit_price}"`,
+        `"${r.line_total}"`,
+        `"${r.sku_snapshot}"`
+      ].join(','))
       .join('\n');
 
     const columns =
@@ -86,9 +94,8 @@ export class RepositoryOrderItems implements IRepoClass<IOrderItems> {
 
     try {
       await fs.writeFile(filePath, completeData, 'utf-8');
-      console.log('Documento CSV creado en:', filePath);
     } catch (error) {
-      console.error('Error creando CSV de ORDER_ITEMS:', error);
+      console.error('Error creando CSV de OrderItems:', error);
       throw error;
     }
   }

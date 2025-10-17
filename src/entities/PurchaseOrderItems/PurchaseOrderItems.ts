@@ -1,4 +1,4 @@
-import type { IRepoClass } from '../../models/contrats/IRepoClass.ts';
+import type { IRepoClass, SeederOptions } from '../../models/contrats/IRepoClass.ts';
 import type { IPurchaseOrderItems } from '../../models/interfaces/modelEntities.ts';
 import { faker } from '@faker-js/faker';
 import { connectionDB as conn } from '../../config/connectionDB/connectionDB.ts';
@@ -9,8 +9,10 @@ import { fileURLToPath } from 'url';
 
 export class RepositoryPurchaseOrderItems implements IRepoClass<IPurchaseOrderItems> {
 
-  generateData(amount: number): IPurchaseOrderItems[] {
+  generateData(amount: number, options?: SeederOptions): IPurchaseOrderItems[] {
     const items: IPurchaseOrderItems[] = [];
+
+    if (!options?.purchaseOrdersToSuppliers || !options?.productVariants) throw new Error('Faltan los parámetros "purchaseOrdersToSuppliers" o "productVariants". \n Estos son necesarios para generar los datos con IDs válidos y mantener la integridad referencial.');
 
     for (let i = 0; i < amount; i++) {
       const quantityOrdered = faker.number.int({ min: 1, max: 100 });
@@ -18,8 +20,8 @@ export class RepositoryPurchaseOrderItems implements IRepoClass<IPurchaseOrderIt
 
       items.push({
         id: i + 1,
-        purchase_order_id: faker.number.int({ min: 1, max: 500 }),
-        product_variant_id: faker.number.int({ min: 1, max: 2000 }),
+        purchase_order_id: faker.number.int({ min: 1, max: options.purchaseOrdersToSuppliers }),
+        product_variant_id: faker.number.int({ min: 1, max: options.productVariants }),
         quantity_ordered: quantityOrdered,
         quantity_received: quantityReceived,
         unit_cost: faker.number.float({ min: 5, max: 500})
@@ -29,14 +31,13 @@ export class RepositoryPurchaseOrderItems implements IRepoClass<IPurchaseOrderIt
     return items;
   }
 
-  async insertData(amount: number): Promise<[ResultSetHeader, FieldPacket[]] | void> {
-    const records = this.generateData(amount);
+  async insertData(amount: number, options?: SeederOptions): Promise<[ResultSetHeader, FieldPacket[]] | void> {
+    const records = this.generateData(amount, options).map(({id, ...rest}) => rest);
 
     if (records.length !== amount)
       throw new Error('No se generaron correctamente los items de orden de compra');
 
     const values = records.flatMap(r => [
-      r.id,
       r.purchase_order_id,
       r.product_variant_id,
       r.quantity_ordered,
@@ -44,11 +45,10 @@ export class RepositoryPurchaseOrderItems implements IRepoClass<IPurchaseOrderIt
       r.unit_cost
     ]);
 
-    const placeholders = records.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
+    const placeholders = records.map(() => '(?, ?, ?, ?, ?)').join(', ');
 
     const query = `
       INSERT INTO PURCHASE_ORDER_ITEMS (
-        id,
         purchase_order_id,
         product_variant_id,
         quantity_ordered,
@@ -67,10 +67,16 @@ export class RepositoryPurchaseOrderItems implements IRepoClass<IPurchaseOrderIt
     }
   }
 
-  async generateCSV(amount: number): Promise<void> {
-    const data = this.generateData(amount)
-      .map(r => Object.values(r))
-      .map(r => r.join(','))
+  async generateCSV(amount: number, options?: SeederOptions): Promise<void> {
+    const data = this.generateData(amount, options)
+      .map(r => [
+        `"${r.id}"`,
+        `"${r.purchase_order_id}"`,
+        `"${r.product_variant_id}"`,
+        `"${r.quantity_ordered}"`,
+        `"${r.quantity_received}"`,
+        `"${r.unit_cost}"`
+      ].join(','))
       .join('\n');
 
     const columns =
@@ -83,9 +89,8 @@ export class RepositoryPurchaseOrderItems implements IRepoClass<IPurchaseOrderIt
 
     try {
       await fs.writeFile(filePath, completeData, 'utf-8');
-      console.log('Documento CSV creado en:', filePath);
     } catch (error) {
-      console.error('Error creando CSV de PURCHASE_ORDER_ITEMS:', error);
+      console.error('Error creando CSV de PurchaseOrderItems:', error);
       throw error;
     }
   }

@@ -1,4 +1,4 @@
-import type { IRepoClass } from '../../models/contrats/IRepoClass.ts';
+import type { IRepoClass, SeederOptions } from '../../models/contrats/IRepoClass.ts';
 import type { IPay } from '../../models/interfaces/modelEntities.ts';
 import { faker } from '@faker-js/faker';
 import { connectionDB as conn } from '../../config/connectionDB/connectionDB.ts';
@@ -6,26 +6,27 @@ import type { FieldPacket, ResultSetHeader } from 'mysql2';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { toMySQLDateTime } from '../../utils/mysqlDateFormat.ts';
 
 export class RepositoryPay implements IRepoClass<IPay> {
 
-  generateData(amount: number): IPay[] {
+  generateData(amount: number, options?: SeederOptions): IPay[] {
     const payments: IPay[] = [];
 
+    if (!options?.orders || !options?.paymentMethods) throw new Error('Faltan los parámetros "orders" o "paymentMethods". \n Estos son necesarios para generar los datos con IDs válidos y mantener la integridad referencial.');
+
     for (let i = 0; i < amount; i++) {
-      const created = faker.date.past({ years: 2 });
-      const paidAt = faker.date.between({ from: created, to: new Date() });
-      const statuses: IPay['status'][] = ['pending', 'authorized', 'captured', 'failed', 'refunded'];
+      const created = faker.date.past({ years: 9 });
 
       payments.push({
-        id: faker.string.nanoid(),
-        order_id: faker.number.int({ min: 1, max: 5000 }),
-        payment_method_id: faker.number.int({ min: 1, max: 1000 }),
+        id: i + 1,
+        order_id: faker.number.int({ min: 1, max: options.orders }),
+        payment_method_id: faker.number.int({ min: 1, max: options.paymentMethods }),
         amount: faker.number.float({ min: 10, max: 2000}),
         currency: faker.helpers.arrayElement(['USD', 'EUR', 'COP', 'MXN']),
-        status: faker.helpers.arrayElement(statuses),
-        transaction_id: faker.number.int({ min: 1000000, max: 9999999 }),
-        paid_at: paidAt,
+        status: faker.helpers.arrayElement(['pending', 'authorized', 'captured', 'failed', 'refunded']),
+        transaction_id: faker.string.alphanumeric(10),
+        paid_at: faker.date.between({ from: created, to: new Date() }),
         created_at: created
       });
     }
@@ -33,27 +34,25 @@ export class RepositoryPay implements IRepoClass<IPay> {
     return payments;
   }
 
-  async insertData(amount: number): Promise<[ResultSetHeader, FieldPacket[]] | void> {
-    const records = this.generateData(amount);
+  async insertData(amount: number, options?: SeederOptions): Promise<[ResultSetHeader, FieldPacket[]] | void> {
+    const records = this.generateData(amount, options).map(({id, ...rest}) => rest);
     if (records.length !== amount) throw new Error('No se generaron correctamente los pagos');
 
     const values = records.flatMap(r => [
-      r.id,
       r.order_id,
       r.payment_method_id,
       r.amount,
       r.currency,
       r.status,
       r.transaction_id,
-      r.paid_at,
-      r.created_at
+      toMySQLDateTime(r.paid_at),
+      toMySQLDateTime(r.created_at)
     ]);
 
-    const placeholders = records.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
+    const placeholders = records.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ');
 
     const query = `
       INSERT INTO PAY (
-        id,
         order_id,
         payment_method_id,
         amount,
@@ -75,9 +74,19 @@ export class RepositoryPay implements IRepoClass<IPay> {
     }
   }
 
-  async generateCSV(amount: number): Promise<void> {
-    const data = this.generateData(amount)
-      .map(r => Object.values(r).join(','))
+  async generateCSV(amount: number, options?: SeederOptions): Promise<void> {
+    const data = this.generateData(amount, options)
+      .map(r => [
+        `"${r.id}"`,
+        `"${r.order_id}"`,
+        `"${r.payment_method_id}"`,
+        `"${r.amount}"`,
+        `"${r.currency}"`,
+        `"${r.status}"`,
+        `"${r.transaction_id}"`,
+        `"${toMySQLDateTime(r.paid_at)}"`,
+        `"${toMySQLDateTime(r.created_at)}"`
+      ].join(','))
       .join('\n');
 
     const columns =
@@ -90,9 +99,8 @@ export class RepositoryPay implements IRepoClass<IPay> {
 
     try {
       await fs.writeFile(filePath, completeData, 'utf-8');
-      console.log('Documento CSV creado en:', filePath);
     } catch (error) {
-      console.error('Error creando CSV de PAY:', error);
+      console.error('Error creando CSV de Pay:', error);
       throw error;
     }
   }
